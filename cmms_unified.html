@@ -807,48 +807,34 @@ const NAV = [
 ];
 
 // Generate 43 assets
-// Generate assets — V17 FIX: respects custom counts from Add Clinic modal + chunked backend support
-function generateAssets(clinicId, counts=3){
-  let dentalUnits=40, autoclaveCount=3, xrayCount=1, compressorCount=0;
-  if(typeof counts==='object' && counts!==null){
-    dentalUnits = counts.dentalUnits ?? counts.dental ?? 40;
-    autoclaveCount = counts.autoclaves ?? counts.autoclave ?? 3;
-    xrayCount = counts.xray ?? counts.xRay ?? 1;
-    compressorCount = counts.compressor ?? counts.comp ?? 0;
-  } else if(typeof counts==='number'){
-    autoclaveCount = counts;
-  }
+function generateAssets(clinicId, autoclaveCount=3){
   const assets = [];
-  for(let i=1;i<=dentalUnits;i++){
-    const room = String.fromCharCode(65 + Math.floor((i-1)/7));
-    const roomIdx = ((i-1)%7)+1;
-    assets.push({
-      assetCode:`DEN-${clinicId}-DU-${String(i).padStart(3,'0')}`,
-      legacyCode:`${room}${roomIdx}`,
-      assetName:`Dental Unit ${room}${roomIdx}`,
-      category:'Dental Unit',
-      model:'Sirona C8+',
-      team:`MT-${clinicId}`,
-      status:'Active',
-      pmFrequency:180,
-      installDate: daysAgo(730),
-      lastPM: null,
-      clinicId
-    });
-  }
-  const autoclaveLetters = ['A','B','C','D','E','F','G','H','I','J'];
+  const rooms = [['A',6],['B',7],['C',7],['D',7],['E',7],['F',6]];
+  let idx = 1;
+  rooms.forEach(([room, count]) => {
+    for(let i=1; i<=count; i++){
+      assets.push({
+        assetCode:`DEN-${clinicId}-DU-${String(idx).padStart(3,'0')}`,
+        legacyCode:`${room}${i}`,
+        assetName:`Dental Unit ${room}${i}`,
+        category:'Dental Unit',
+        model:'Sirona C8+',
+        team:`MT-${clinicId}`,
+        status:'Active',
+        pmFrequency:180,
+        installDate: daysAgo(730),
+        lastPM: null,
+        clinicId
+      });
+      idx++;
+    }
+  });
+  const autoclaveLetters = ['A','B','C','D','E'];
   for(let i=0; i<autoclaveCount; i++){
     const n = String(i+1).padStart(3,'0');
-    assets.push({assetCode:`DEN-${clinicId}-AUT-${n}`,legacyCode:`AUT-${autoclaveLetters[i]||i+1}`,assetName:`Autoclave ${autoclaveLetters[i]||i+1}`,category:'Autoclave',model:'Melag',team:`MT-${clinicId}`,status:'Active',pmFrequency:90,installDate:daysAgo(730),lastPM:null,clinicId});
+    assets.push({assetCode:`DEN-${clinicId}-AUT-${n}`,legacyCode:`AUT-${autoclaveLetters[i]}`,assetName:`Autoclave ${autoclaveLetters[i]}`,category:'Autoclave',model:'Melag',team:`MT-${clinicId}`,status:'Active',pmFrequency:90,installDate:daysAgo(730),lastPM:null,clinicId});
   }
-  for(let i=0;i<xrayCount;i++){
-    const n = String(i+1).padStart(3,'0');
-    assets.push({assetCode:`DEN-${clinicId}-XR-${n}`,legacyCode:`XR-${i+1}`,assetName:`X-Ray Unit ${i+1}`,category:'X-Ray',model:'Heliodent Plus',team:`MT-${clinicId}`,status:'Active',pmFrequency:180,installDate:daysAgo(730),lastPM:null,clinicId});
-  }
-  for(let i=0;i<compressorCount;i++){
-    const n = String(i+1).padStart(3,'0');
-    assets.push({assetCode:`DEN-${clinicId}-COMP-${n}`,legacyCode:`COMP-${i+1}`,assetName:`Compressor ${i+1}`,category:'Compressor',model:'Cattani',team:`MT-${clinicId}`,status:'Active',pmFrequency:180,installDate:daysAgo(730),lastPM:null,clinicId});
-  }
+  assets.push({assetCode:`DEN-${clinicId}-XR-001`,legacyCode:'XR-1',assetName:'X-Ray Unit',category:'X-Ray',model:'Heliodent Plus',team:`MT-${clinicId}`,status:'Active',pmFrequency:180,installDate:daysAgo(730),lastPM:null,clinicId});
   return assets;
 }
 
@@ -3216,11 +3202,38 @@ function openClinicModal(clinicId=null){
   const isEdit = !!clinicId;
   const c = isEdit ? (DB.clinics||[]).find(x=>x.id===clinicId) : null;
   openModal(isEdit?`Edit Clinic — ${c.code}`:'Add Clinic',`
-    <div class="form-group"><label class="form-label">Clinic Code / ID</label><input type="text" class="form-input" id="clinic-code" value="${isEdit?c.code:''}" ${isEdit?'readonly':''} placeholder="e.g. C212"><p style="font-size:11px;color:var(--text-muted);margin-top:4px">Short code, used in asset codes and QR links. Cannot be changed after creation.</p></div>
-    <div class="form-group"><label class="form-label">Clinic Name</label><input type="text" class="form-input" id="clinic-name" value="${isEdit?c.name:''}" placeholder="e.g. Clinic C212 — Faculty of Dentistry"></div>
+    <div class="form-group"><label class="form-label">Clinic Code / ID</label><input type="text" class="form-input" id="clinic-code" value="${isEdit?c.code:''}" ${isEdit?'readonly':''} placeholder="e.g. 501"><p style="font-size:11px;color:var(--text-muted);margin-top:4px">Short code, used in asset codes and QR links. Cannot be changed after creation.</p></div>
+    <div class="form-group"><label class="form-label">Clinic Name</label><input type="text" class="form-input" id="clinic-name" value="${isEdit?c.name:''}" placeholder="e.g. Clinic 501 — Faculty of Dentistry"></div>
+    ${!isEdit?`
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <label class="form-label" style="font-weight:700">Initial Assets (optional — leave 0 for empty)</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div class="form-group" style="margin:0"><label class="form-label">Dental Units</label><input type="number" min="0" max="100" class="form-input" id="clinic-dental" value="0"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Autoclaves</label><input type="number" min="0" max="20" class="form-input" id="clinic-autoclave" value="0"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">X-Ray</label><input type="number" min="0" max="20" class="form-input" id="clinic-xray" value="0"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">Compressors</label><input type="number" min="0" max="20" class="form-input" id="clinic-compressor" value="0"></div>
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Example: Dental 10, Autoclave 2, X-Ray 1, Compressor 1 = 14 assets total</p>
+    </div>`:''}
     ${isEdit?`<div class="form-group"><label class="form-label">Status</label><select class="form-select" id="clinic-active"><option value="true" ${c.active!==false?'selected':''}>Active</option><option value="false" ${c.active===false?'selected':''}>Inactive</option></select></div>`:''}
   `,`<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveClinic('${clinicId||''}')">${isEdit?'Update':'Create'}</button>`);
 }
+
+function generateAssetsForNewClinic_(clinicId, counts){
+  const assets=[];
+  const add = (type, count, prefix) => {
+    for(let i=1;i<=count;i++){
+      const code = `${clinicId}-${prefix}-${String(i).padStart(2,'0')}`;
+      assets.push({id:code, assetCode:code, code, clinicId, type, name:`${type} ${i}`, status:'operational', location:clinicId, createdAt:new Date().toISOString()});
+    }
+  };
+  add('Dental Chair', counts.dental||0, 'DC');
+  add('Autoclave', counts.autoclave||0, 'AC');
+  add('X-Ray', counts.xray||0, 'XR');
+  add('Compressor', counts.compressor||0, 'CP');
+  return assets;
+}
+
 
 function saveClinic(clinicId){
   const code = document.getElementById('clinic-code').value.trim();
@@ -3236,7 +3249,20 @@ function saveClinic(clinicId){
   } else {
     if(DB.clinics.find(x=>x.id===code)){toast('Clinic code already exists','error');return;}
     DB.clinics.push({id:code, code, name, active:true});
-    toast('Clinic added: '+name);
+    // --- NEW: custom asset counts ---
+    const dental = parseInt(document.getElementById('clinic-dental')?.value||'0',10)||0;
+    const autoclave = parseInt(document.getElementById('clinic-autoclave')?.value||'0',10)||0;
+    const xray = parseInt(document.getElementById('clinic-xray')?.value||'0',10)||0;
+    const compressor = parseInt(document.getElementById('clinic-compressor')?.value||'0',10)||0;
+    const total = dental+autoclave+xray+compressor;
+    if(total>0){
+      const newAssets = generateAssetsForNewClinic_(code, {dental, autoclave, xray, compressor});
+      if(!DB.assets) DB.assets=[];
+      DB.assets.push(...newAssets);
+      toast('Clinic added: '+name+' with '+total+' assets');
+    } else {
+      toast('Clinic added: '+name+' (empty — add assets later)');
+    }
   }
   saveDB(); closeModal(); renderClinicSwitcher(); navigate('clinics');
 }
